@@ -23,7 +23,7 @@ class InvoiceController extends Controller
             ->when($filter === 'sent', fn ($q) => $q->where('status', Invoice::STATUS_SENT)->whereDate('due_date', '>=', today()))
             ->when($filter === 'draft', fn ($q) => $q->where('status', Invoice::STATUS_DRAFT))
             ->when($filter === 'paid', fn ($q) => $q->whereNotNull('paid_at'))
-            ->orderByRaw("CASE WHEN paid_at IS NULL AND due_date < CURDATE() THEN 0 ELSE 1 END")
+            ->orderByRaw('CASE WHEN paid_at IS NULL AND due_date < ? THEN 0 ELSE 1 END', [today()->toDateString()])
             ->orderBy('due_date')
             ->paginate(15)
             ->withQueryString();
