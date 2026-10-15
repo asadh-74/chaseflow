@@ -1,0 +1,150 @@
+# ChaseFlow Render Blueprint
+# Provisions: web service, queue worker, nightly cron, MySQL, Redis.
+services:
+  - type: web
+    name: chaseflow-web
+    runtime: docker
+    healthCheckPath: /up
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: false
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        sync: false # set to your https://chaseflow-web.onrender.com URL
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromDatabase:
+          name: chaseflow-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: chaseflow-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: chaseflow-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: chaseflow-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: chaseflow-db
+          property: password
+      - key: CACHE_STORE
+        value: redis
+      - key: SESSION_DRIVER
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: chaseflow-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: chaseflow-redis
+          property: port
+      - key: MAIL_MAILER
+        value: ses
+      - key: MAIL_FROM_ADDRESS
+        sync: false # must be a verified SES sender
+      - key: MAIL_FROM_NAME
+        value: ChaseFlow
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: us-east-1
+      - key: AWS_BUCKET
+        sync: false
+      - key: LATE_FEE_PERCENT
+        value: '5'
+
+  - type: worker
+    name: chaseflow-worker
+    runtime: docker
+    dockerCommand: php artisan queue:work redis --queue=default,mail --sleep=3 --tries=3 --timeout=120 --daemon
+    envVars: &sharedEnv
+      - key: APP_ENV
+        value: production
+      - key: APP_KEY
+        generateValue: true
+      - key: DB_CONNECTION
+        value: mysql
+      - key: DB_HOST
+        fromDatabase:
+          name: chaseflow-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: chaseflow-db
+          property: port
+      - key: DB_DATABASE
+        fromDatabase:
+          name: chaseflow-db
+          property: database
+      - key: DB_USERNAME
+        fromDatabase:
+          name: chaseflow-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: chaseflow-db
+          property: password
+      - key: CACHE_STORE
+        value: redis
+      - key: QUEUE_CONNECTION
+        value: redis
+      - key: REDIS_HOST
+        fromService:
+          type: redis
+          name: chaseflow-redis
+          property: host
+      - key: REDIS_PORT
+        fromService:
+          type: redis
+          name: chaseflow-redis
+          property: port
+      - key: MAIL_MAILER
+        value: ses
+      - key: MAIL_FROM_ADDRESS
+        sync: false
+      - key: MAIL_FROM_NAME
+        value: ChaseFlow
+      - key: AWS_ACCESS_KEY_ID
+        sync: false
+      - key: AWS_SECRET_ACCESS_KEY
+        sync: false
+      - key: AWS_DEFAULT_REGION
+        value: us-east-1
+      - key: AWS_BUCKET
+        sync: false
+      - key: LATE_FEE_PERCENT
+        value: '5'
+
+  - type: cron
+    name: chaseflow-scheduler
+    runtime: docker
+    schedule: "0 1 * * *" # 1 AM nightly: process overdue invoices
+    dockerCommand: php artisan schedule:run
+    envVars: *sharedEnv
+
+  - type: redis
+    name: chaseflow-redis
+    plan: free
+    ipAllowList: []
+
+databases:
+  - name: chaseflow-db
+    databaseName: chaseflow
+    user: chaseflow
+    plan: starter
